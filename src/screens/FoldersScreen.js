@@ -119,7 +119,7 @@ const FoldersScreen = ({ navigation }) => {
   };
   
   const handleFolderPress = (folder) => {
-    navigation.navigate('Videos', { folder });
+    navigation.navigate('LocalVideos', { folder });
   };
   
   const renderFolderGrid = ({ item }) => (

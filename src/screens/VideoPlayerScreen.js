@@ -1,25 +1,4 @@
-// src/screens/VideoPlayerScreen.js
-
-/**
- * Video Player Screen - Complete MX Player Clone
- * 
- * FEATURES INCLUDED:
- * ✅ Touch gestures (swipe for volume/brightness, double-tap seek)
- * ✅ Playback speed control (0.25x - 2x)
- * ✅ Screen lock
- * ✅ Auto-rotation
- * ✅ Picture-in-Picture (PiP)
- * ✅ Subtitle support
- * ✅ Audio track selection
- * ✅ Resume from last position
- * ✅ Brightness & Volume gestures
- * ✅ Forward/Backward seek (10s)
- * ✅ Full-screen controls
- * ✅ Progress bar with preview
- * ✅ Background audio playback
- * ✅ Keep screen on
- * ✅ Equalizer integration
- */
+// src/screens/VideoPlayerScreen.js - FIXED PANRESPONDER
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
@@ -28,12 +7,10 @@ import {
   Dimensions,
   StatusBar,
   TouchableOpacity,
-  TouchableWithoutFeedback,
   Text,
   BackHandler,
   Alert,
   Modal,
-  Platform,
   PanResponder,
   ActivityIndicator,
   ScrollView,
@@ -43,7 +20,6 @@ import Video from 'react-native-video';
 import Orientation from 'react-native-orientation-locker';
 import SystemSetting from 'react-native-system-setting';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import Slider from '@react-native-community/slider';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   setIsPlaying,
@@ -53,9 +29,7 @@ import {
   setVolume,
   setBrightness,
   saveWatchPosition,
-  toggleControls,
   setShowControls,
-  setPiPMode,
 } from '../store/slices/playerSlice';
 import { addToRecentlyPlayed } from '../store/slices/videoSlice';
 import { formatDuration } from '../utils/formatters';
@@ -68,8 +42,7 @@ const { width, height } = Dimensions.get('window');
 const VideoPlayerScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const videoRef = useRef(null);
-  
-  // Redux state
+
   const currentVideo = useSelector((state) => state.player.currentVideo);
   const isPlaying = useSelector((state) => state.player.isPlaying);
   const currentTime = useSelector((state) => state.player.currentTime);
@@ -80,65 +53,66 @@ const VideoPlayerScreen = ({ navigation }) => {
   const showControls = useSelector((state) => state.player.showControls);
   const watchHistory = useSelector((state) => state.player.watchHistory);
   const settings = useSelector((state) => state.settings);
-  
-  // Local state
+
   const [isLocked, setIsLocked] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(true);
-  const [isPaused, setIsPaused] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [showSpeedMenu, setShowSpeedMenu] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
   const [buffering, setBuffering] = useState(false);
-  
-  // Control timeout ref
+
   const controlsTimeout = useRef(null);
-  
-  // Save position interval
   const saveInterval = useRef(null);
-  
-  // Gesture states
-  const [gestureType, setGestureType] = useState(null); // 'volume', 'brightness', 'seek'
+
+  const [gestureType, setGestureType] = useState(null);
   const [gestureValue, setGestureValue] = useState(0);
   const [showGestureOverlay, setShowGestureOverlay] = useState(false);
-  
-  // Initialize
+
+  // Refs to avoid stale closure inside PanResponder
+  const gestureTypeRef = useRef(null);
+  const isGesturingRef = useRef(false);
+
+  const brightnessRef = useRef(brightness);
+  const volumeRef = useRef(volume);
+  const currentTimeRef = useRef(currentTime);
+  const durationRef = useRef(duration);
+
+
+  // ✅ Track if gesture is in progress
+  const [isGesturing, setIsGesturing] = useState(false);
+
   useEffect(() => {
-    // Lock to landscape
+    brightnessRef.current = brightness;
+  }, [brightness]);
+
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime;
+  }, [currentTime]);
+
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
+
+
+  useEffect(() => {
     Orientation.lockToLandscape();
-    
-    // Hide status bar
     StatusBar.setHidden(true);
-    
-    // Keep screen on
-    if (settings.keepScreenOn) {
-      // Keep screen awake (implement with react-native-keep-awake if needed)
-    }
-    
-    // Add to recently played
+    dispatch(setShowControls(true));
+
     if (currentVideo) {
       dispatch(addToRecentlyPlayed(currentVideo));
     }
-    
-    // Load saved position
-    const savedPosition = watchHistory[currentVideo?.id];
-    if (savedPosition && savedPosition.position > 0) {
-      // Seek to saved position after video loads
-    }
-    
-    // Cleanup
+
     return () => {
       Orientation.unlockAllOrientations();
       StatusBar.setHidden(false);
-      
-      // Clear intervals
-      if (saveInterval.current) {
-        clearInterval(saveInterval.current);
-      }
-      if (controlsTimeout.current) {
-        clearTimeout(controlsTimeout.current);
-      }
-      
-      // Save final position
+
+      if (saveInterval.current) clearInterval(saveInterval.current);
+      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+
       if (currentVideo && duration > 0) {
         dispatch(saveWatchPosition({
           videoId: currentVideo.id,
@@ -148,8 +122,16 @@ const VideoPlayerScreen = ({ navigation }) => {
       }
     };
   }, []);
-  
-  // Auto-save position every 5 seconds
+  useEffect(() => {
+    // Sync initial brightness with system/app brightness
+    SystemSetting.getBrightness().then((val) => {
+      brightnessRef.current = val;
+      dispatch(setBrightness(val));
+    }).catch((e) => {
+      console.warn('Failed to get brightness', e);
+    });
+  }, []);
+
   useEffect(() => {
     saveInterval.current = setInterval(() => {
       if (currentVideo && duration > 0 && currentTime > 0) {
@@ -159,70 +141,62 @@ const VideoPlayerScreen = ({ navigation }) => {
           duration: duration,
         }));
       }
-    }, 5000);
-    
+    }, 500);
+
     return () => {
-      if (saveInterval.current) {
-        clearInterval(saveInterval.current);
-      }
+      if (saveInterval.current) clearInterval(saveInterval.current);
     };
   }, [currentVideo, currentTime, duration]);
-  
-  // Handle back button
- useFocusEffect(
-  useCallback(() => {
-    const onBackPress = () => {
-      handleBack();
-      return true;
-    };
 
-    // NEW WAY: Subscribe returns an object with .remove() method
-    const backHandler = BackHandler.addEventListener(
-      'hardwareBackPress',
-      onBackPress
-    );
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        handleBack();
+        return true;
+      };
 
-    // Cleanup: Call .remove() on the subscription
-    return () => {
-      backHandler.remove();
-    };
-  }, []) // Empty deps - handleBack is stable
-);
-  
+      const backHandler = BackHandler.addEventListener(
+        'hardwareBackPress',
+        onBackPress
+      );
+
+      return () => backHandler.remove();
+    }, [])
+  );
+
   const handleBack = () => {
     Alert.alert(
       'Exit Player',
       'Do you want to exit?',
       [
         { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Exit',
-          onPress: () => navigation.goBack(),
-        },
+        { text: 'Exit', onPress: () => navigation.goBack() },
       ]
     );
   };
-  
-  // Video callbacks
+
   const onLoad = (data) => {
     dispatch(setDuration(data.duration));
-    
-    // Seek to saved position
+    dispatch(setIsPlaying(true));
+
     const savedPosition = watchHistory[currentVideo?.id];
     if (savedPosition && savedPosition.position > 0 && videoRef.current) {
       videoRef.current.seek(savedPosition.position);
     }
+
+    resetControlsTimeout();
   };
-  
+
   const onProgress = (data) => {
     if (!isSeeking) {
       dispatch(setCurrentTime(data.currentTime));
     }
   };
-  
+
   const onEnd = () => {
     dispatch(setIsPlaying(false));
-    // Clear watch position (video completed)
+    dispatch(setShowControls(true));
+
     if (currentVideo) {
       dispatch(saveWatchPosition({
         videoId: currentVideo.id,
@@ -231,68 +205,208 @@ const VideoPlayerScreen = ({ navigation }) => {
       }));
     }
   };
-  
+
   const onError = (error) => {
     console.error('Video error:', error);
     Alert.alert('Playback Error', 'Failed to play video. Please try again.');
   };
-  
+
   const onBuffer = ({ isBuffering }) => {
     setBuffering(isBuffering);
   };
-  
-  // Playback controls
+
   const togglePlayPause = () => {
     dispatch(setIsPlaying(!isPlaying));
   };
-  
+
   const seekForward = () => {
-    const newTime = Math.min(currentTime + settings.seekInterval, duration);
+    const seekInterval = settings?.seekInterval || 10;
+    const newTime = Math.min(currentTime + seekInterval, duration);
     videoRef.current?.seek(newTime);
     dispatch(setCurrentTime(newTime));
-    showSeekOverlay(settings.seekInterval);
+    showSeekOverlay(seekInterval);
   };
-  
+
   const seekBackward = () => {
-    const newTime = Math.max(currentTime - settings.seekInterval, 0);
+    const seekInterval = settings?.seekInterval || 10;
+    const newTime = Math.max(currentTime - seekInterval, 0);
     videoRef.current?.seek(newTime);
     dispatch(setCurrentTime(newTime));
-    showSeekOverlay(-settings.seekInterval);
+    showSeekOverlay(-seekInterval);
   };
-  
+
   const handleSeek = (value) => {
     videoRef.current?.seek(value);
     dispatch(setCurrentTime(value));
   };
-  
+
   const changePlaybackSpeed = (rate) => {
     dispatch(setPlaybackRate(rate));
     setShowSpeedMenu(false);
   };
-  
-  // Controls visibility
+
   const showControlsTemporarily = () => {
     if (!isLocked) {
       dispatch(setShowControls(true));
       resetControlsTimeout();
     }
   };
-  
+
   const resetControlsTimeout = () => {
     if (controlsTimeout.current) {
       clearTimeout(controlsTimeout.current);
     }
-    
+
     controlsTimeout.current = setTimeout(() => {
-      if (isPlaying && !isSeeking && !settingsVisible) {
+      if (isPlaying && !isSeeking && !settingsVisible && !showSpeedMenu) {
         dispatch(setShowControls(false));
       }
-    }, 3000);
+    }, 500);
   };
-  
+
+  // ✅ FIXED: PanResponder that handles both gestures and taps
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isLocked,
+      onMoveShouldSetPanResponder: (evt, gestureState) => {
+        // Only capture if moved more than 10px
+        return (
+          !isLocked &&
+          (Math.abs(gestureState.dx) > 10 || Math.abs(gestureState.dy) > 10)
+        );
+      },
+
+      onPanResponderGrant: () => {
+        // Reset per-gesture refs + UI state
+        isGesturingRef.current = false;
+        gestureTypeRef.current = null;
+
+        setIsGesturing(false);
+        setGestureType(null);
+        setShowGestureOverlay(false);
+      },
+
+      onPanResponderMove: (evt, gestureState) => {
+        if (isLocked) return;
+
+        const { dx, dy } = gestureState;
+
+        // If moved enough, it's a gesture (not a tap)
+        if (!isGesturingRef.current &&
+          (Math.abs(dx) > 10 || Math.abs(dy) > 10)
+        ) {
+          isGesturingRef.current = true;
+          setIsGesturing(true);
+          setShowGestureOverlay(true);
+
+        }
+
+        if (!isGesturingRef.current) {
+          return;
+        }
+
+        // Determine gesture type on first significant move
+        if (!gestureTypeRef.current) {
+          const { locationX } = evt.nativeEvent;
+          const screenWidth = width;
+
+          if (Math.abs(dy) > Math.abs(dx)) {
+            // Vertical gestures: brightness (left) / volume (right)
+            if (locationX < screenWidth / 2) {
+              gestureTypeRef.current = 'brightness';
+            } else {
+              gestureTypeRef.current = 'volume';
+            }
+          } else {
+            // Horizontal gestures: seek
+            gestureTypeRef.current = 'seek';
+          }
+
+          setGestureType(gestureTypeRef.current);
+          setShowGestureOverlay(true);
+        }
+
+        const type = gestureTypeRef.current;
+        const sensitivity = 0.5;
+
+        if (type === 'brightness' && settings?.brightnessGesture !== false) {
+          const change = (-dy * sensitivity) / height;
+          const base = brightnessRef.current;
+          let newBrightness = base + change;
+
+          newBrightness = Math.max(0, Math.min(1, newBrightness));
+
+          dispatch(setBrightness(newBrightness));
+          SystemSetting.setAppBrightness(newBrightness);
+
+          setGestureValue(Math.round(newBrightness * 100));
+        } else if (type === 'volume' && settings?.volumeGesture !== false) {
+          const change = (-dy * sensitivity) / height;
+          const base = volumeRef.current;
+          let newVolume = base + change;
+
+          newVolume = Math.max(0, Math.min(1, newVolume));
+
+          dispatch(setVolume(newVolume));
+          SystemSetting.setVolume(newVolume);
+
+          setGestureValue(Math.round(newVolume * 100));
+        } else if (type === 'seek' && settings?.swipeToSeek !== false) {
+          // Show how many seconds we’ll seek, apply on release
+          const seekAmount = (dx / width) * 60; // +/- 60s max
+          setGestureValue(Math.round(seekAmount));
+        }
+      },
+
+      onPanResponderRelease: (evt, gestureState) => {
+        const type = gestureTypeRef.current;
+
+        if (isGesturingRef.current && type === 'seek' && settings?.swipeToSeek !== false) {
+          const { dx } = gestureState;
+          const seekAmount = (dx / width) * 60;
+          const baseTime = currentTimeRef.current;
+          const totalDuration = durationRef.current || 0;
+
+          const newTime = Math.max(
+            0,
+            Math.min(totalDuration, baseTime + seekAmount)
+          );
+
+          handleSeek(newTime);
+        }
+
+        // If it was just a tap (no gesture), toggle controls
+        if (!isGesturingRef.current) {
+          handleScreenTap();
+        }
+
+        // Reset gesture state
+        isGesturingRef.current = false;
+        gestureTypeRef.current = null;
+
+        setShowGestureOverlay(false);
+        setGestureType(null);
+        setGestureValue(0);
+        setIsGesturing(false);
+      },
+
+      onPanResponderTerminationRequest: () => true,
+      onPanResponderTerminate: () => {
+        // Same reset as release
+        isGesturingRef.current = false;
+        gestureTypeRef.current = null;
+
+        setShowGestureOverlay(false);
+        setGestureType(null);
+        setGestureValue(0);
+        setIsGesturing(false);
+      },
+    })
+  ).current;
+
   const handleScreenTap = () => {
     if (isLocked) return;
-    
+
     if (showControls) {
       dispatch(setShowControls(false));
       if (controlsTimeout.current) {
@@ -302,94 +416,18 @@ const VideoPlayerScreen = ({ navigation }) => {
       showControlsTemporarily();
     }
   };
-  
-  const handleDoubleTap = (event) => {
-    if (isLocked) return;
-    
-    const { locationX } = event.nativeEvent;
-    const screenWidth = width;
-    
-    if (locationX < screenWidth / 2) {
-      seekBackward();
-    } else {
-      seekForward();
-    }
-  };
-  
-  // Gesture handlers
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !isLocked && settings.gesturesEnabled,
-      onMoveShouldSetPanResponder: () => !isLocked && settings.gesturesEnabled,
-      
-      onPanResponderGrant: (evt) => {
-        const { locationX } = evt.nativeEvent;
-        const screenWidth = width;
-        
-        // Determine gesture type based on start position
-        if (locationX < screenWidth / 3) {
-          setGestureType('brightness');
-        } else if (locationX > (screenWidth * 2) / 3) {
-          setGestureType('volume');
-        } else {
-          setGestureType('seek');
-        }
-        
-        setShowGestureOverlay(true);
-      },
-      
-      onPanResponderMove: (evt, gestureState) => {
-        const { dy, dx } = gestureState;
-        const sensitivity = 0.5;
-        
-        if (gestureType === 'brightness' && settings.brightnessGesture) {
-          // Brightness control (up = increase, down = decrease)
-          const change = -dy * sensitivity / height;
-          const newBrightness = Math.max(0, Math.min(1, brightness + change));
-          dispatch(setBrightness(newBrightness));
-          SystemSetting.setBrightness(newBrightness);
-          setGestureValue(Math.round(newBrightness * 100));
-        } else if (gestureType === 'volume' && settings.volumeGesture) {
-          // Volume control (up = increase, down = decrease)
-          const change = -dy * sensitivity / height;
-          const newVolume = Math.max(0, Math.min(1, volume + change));
-          dispatch(setVolume(newVolume));
-          SystemSetting.setVolume(newVolume);
-          setGestureValue(Math.round(newVolume * 100));
-        } else if (gestureType === 'seek' && settings.swipeToSeek) {
-          // Seek control (left/right)
-          const seekAmount = (dx / width) * 60; // 60 seconds for full swipe
-          setGestureValue(Math.round(seekAmount));
-        }
-      },
-      
-      onPanResponderRelease: (evt, gestureState) => {
-        if (gestureType === 'seek') {
-          const { dx } = gestureState;
-          const seekAmount = (dx / width) * 60;
-          const newTime = Math.max(0, Math.min(duration, currentTime + seekAmount));
-          handleSeek(newTime);
-        }
-        
-        setShowGestureOverlay(false);
-        setGestureType(null);
-        setGestureValue(0);
-      },
-    })
-  ).current;
-  
+
   const showSeekOverlay = (seconds) => {
     setGestureType('seek');
     setGestureValue(seconds);
     setShowGestureOverlay(true);
-    
+
     setTimeout(() => {
       setShowGestureOverlay(false);
       setGestureType(null);
     }, 1000);
   };
-  
-  // Lock screen
+
   const toggleLock = () => {
     setIsLocked(!isLocked);
     if (!isLocked) {
@@ -398,15 +436,7 @@ const VideoPlayerScreen = ({ navigation }) => {
       showControlsTemporarily();
     }
   };
-  
-  // Picture-in-Picture
-  const enterPiP = () => {
-    // Implement PiP mode
-    dispatch(setPiPMode(true));
-    // Use react-native-pip-android for Android
-    // iOS has native PiP support
-  };
-  
+
   if (!currentVideo) {
     return (
       <View style={styles.container}>
@@ -414,7 +444,7 @@ const VideoPlayerScreen = ({ navigation }) => {
       </View>
     );
   }
-  
+
   return (
     <View style={styles.container}>
       {/* Video Player */}
@@ -431,36 +461,19 @@ const VideoPlayerScreen = ({ navigation }) => {
         onEnd={onEnd}
         onError={onError}
         onBuffer={onBuffer}
-        playInBackground={settings.backgroundAudio}
+        playInBackground={settings?.backgroundAudio || false}
         playWhenInactive={false}
         ignoreSilentSwitch="ignore"
       />
-      
-      {/* Gesture Overlay */}
-      <View
-        style={styles.gestureLayer}
-        {...panResponder.panHandlers}
-      >
-        <TouchableWithoutFeedback
-          onPress={handleScreenTap}
-          onLongPress={() => {
-            if (settings.doubleTapToSeek) {
-              // Handle long press if needed
-            }
-          }}
-        >
-          <View style={styles.touchableArea} />
-        </TouchableWithoutFeedback>
-      </View>
-      
+
+      {/* ✅ FIXED: Gesture Layer WITHOUT TouchableWithoutFeedback */}
+      <View style={styles.gestureLayer} {...panResponder.panHandlers} />
+
       {/* Gesture Feedback Overlay */}
       {showGestureOverlay && (
-        <GestureOverlay
-          type={gestureType}
-          value={gestureValue}
-        />
+        <GestureOverlay type={gestureType} value={gestureValue} />
       )}
-      
+
       {/* Buffering Indicator */}
       {buffering && (
         <View style={styles.bufferingContainer}>
@@ -468,27 +481,21 @@ const VideoPlayerScreen = ({ navigation }) => {
           <Text style={styles.bufferingText}>Buffering...</Text>
         </View>
       )}
-      
-      {/* Lock Button (Always visible) */}
-      {!isLocked && (
-        <TouchableOpacity
-          style={styles.lockButton}
-          onPress={toggleLock}
-        >
+
+      {/* Lock Button */}
+      {showControls && !isLocked && (
+        <TouchableOpacity style={styles.lockButton} onPress={toggleLock}>
           <Ionicons name="lock-open-outline" size={24} color="#FFFFFF" />
         </TouchableOpacity>
       )}
-      
+
       {isLocked && (
-        <TouchableOpacity
-          style={styles.lockButtonLocked}
-          onPress={toggleLock}
-        >
+        <TouchableOpacity style={styles.lockButtonLocked} onPress={toggleLock}>
           <Ionicons name="lock-closed" size={24} color="#FFFFFF" />
           <Text style={styles.lockText}>Tap to unlock</Text>
         </TouchableOpacity>
       )}
-      
+
       {/* Video Controls */}
       {showControls && !isLocked && (
         <VideoControls
@@ -501,26 +508,41 @@ const VideoPlayerScreen = ({ navigation }) => {
           onSeekBackward={seekBackward}
           onSeek={handleSeek}
           onBack={handleBack}
-          onSettings={() => setSettingsVisible(true)}
-          onSpeedPress={() => setShowSpeedMenu(true)}
-          onPiP={enterPiP}
+          onSettings={() => {
+            setSettingsVisible(true);
+            if (controlsTimeout.current) {
+              clearTimeout(controlsTimeout.current);
+            }
+          }}
+          onSpeedPress={() => {
+            setShowSpeedMenu(true);
+            if (controlsTimeout.current) {
+              clearTimeout(controlsTimeout.current);
+            }
+          }}
           videoName={currentVideo.name}
         />
       )}
-      
+
       {/* Speed Menu */}
       {showSpeedMenu && (
         <SpeedMenu
           currentRate={playbackRate}
           onSelectRate={changePlaybackSpeed}
-          onClose={() => setShowSpeedMenu(false)}
+          onClose={() => {
+            setShowSpeedMenu(false);
+            resetControlsTimeout();
+          }}
         />
       )}
-      
+
       {/* Settings Menu */}
       {settingsVisible && (
         <SettingsMenu
-          onClose={() => setSettingsVisible(false)}
+          onClose={() => {
+            setSettingsVisible(false);
+            resetControlsTimeout();
+          }}
         />
       )}
     </View>
@@ -530,40 +552,37 @@ const VideoPlayerScreen = ({ navigation }) => {
 // Speed Menu Component
 const SpeedMenu = ({ currentRate, onSelectRate, onClose }) => {
   const speeds = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0];
-  
+
   return (
-    <Modal
-      visible={true}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
+    <Modal visible={true} transparent animationType="fade" onRequestClose={onClose}>
       <TouchableOpacity
         style={styles.speedMenuOverlay}
         activeOpacity={1}
         onPress={onClose}
       >
-        <ScrollView style={styles.speedMenuContent}>
+        <View style={styles.speedMenuContent}>
           <Text style={styles.speedMenuTitle}>Playback Speed</Text>
-          
-          {speeds.map((speed) => (
-            <TouchableOpacity
-              key={speed}
-              style={styles.speedMenuItem}
-              onPress={() => onSelectRate(speed)}
-            >
-              <Text style={[
-                styles.speedMenuText,
-                currentRate === speed && styles.speedMenuTextActive
-              ]}>
-                {speed}x {speed === 1.0 && '(Normal)'}
-              </Text>
-              {currentRate === speed && (
-                <Ionicons name="checkmark" size={20} color="#E50914" />
-              )}
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+
+          <ScrollView>
+            {speeds.map((speed) => (
+              <TouchableOpacity
+                key={speed}
+                style={styles.speedMenuItem}
+                onPress={() => onSelectRate(speed)}
+              >
+                <Text style={[
+                  styles.speedMenuText,
+                  currentRate === speed && styles.speedMenuTextActive
+                ]}>
+                  {speed}x {speed === 1.0 && '(Normal)'}
+                </Text>
+                {currentRate === speed && (
+                  <Ionicons name="checkmark" size={20} color="#E50914" />
+                )}
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </TouchableOpacity>
     </Modal>
   );
@@ -588,11 +607,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-  touchableArea: {
-    flex: 1,
-  },
-  
-  // Buffering
   bufferingContainer: {
     position: 'absolute',
     top: '50%',
@@ -606,8 +620,6 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 14,
   },
-  
-  // Lock
   lockButton: {
     position: 'absolute',
     left: 20,
@@ -633,10 +645,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 12,
   },
-  
-  // Speed Menu
   speedMenuOverlay: {
-    // flex: 1,
+    flex: 1,
     backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -646,6 +656,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     minWidth: 200,
+    maxHeight: 400,
   },
   speedMenuTitle: {
     color: '#FFFFFF',
@@ -658,7 +669,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical:5,
+    paddingVertical: 12,
   },
   speedMenuText: {
     color: '#FFFFFF',
@@ -668,7 +679,6 @@ const styles = StyleSheet.create({
     color: '#E50914',
     fontWeight: 'bold',
   },
-  
   errorText: {
     color: '#FFFFFF',
     fontSize: 16,

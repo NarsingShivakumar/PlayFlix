@@ -20,6 +20,7 @@ import DrawerContent from '../components/DrawerContent';
 
 // Redux
 import { restoreDriveSession } from '../store/slices/driveSlice';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -177,6 +178,7 @@ const RootNavigator = () => {
   }, [dispatch]);
 
   return (
+    <SafeAreaView style={{flex:1 }} >
     <NavigationContainer theme={navigationTheme}>
       <Stack.Navigator
         screenOptions={{
@@ -207,6 +209,7 @@ const RootNavigator = () => {
         />
       </Stack.Navigator>
     </NavigationContainer>
+    </SafeAreaView>
   );
 };
 

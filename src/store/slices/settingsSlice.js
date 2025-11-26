@@ -12,146 +12,160 @@ const settingsSlice = createSlice({
   initialState: {
     // Theme
     theme: 'dark', // 'light' | 'dark'
-    
-    // Player preferences
-    autoplay: true,
-    continueWatching: true,
-    defaultPlaybackRate: 1.0,
-    defaultQuality: 'auto',
-    
-    // Gestures
+    autoplay: false,
     gesturesEnabled: true,
-    swipeToSeek: true,
-    doubleTapToSeek: true,
+    backgroundAudio: true,
+    keepScreenOn: true,
     seekInterval: 10, // seconds
-    volumeGesture: true,
-    brightnessGesture: true,
     
     // Subtitles
-    subtitlesEnabled: true,
+    subtitlesEnabled: false,
     subtitleSize: 16,
     subtitleColor: '#FFFFFF',
-    subtitleBackgroundColor: 'rgba(0,0,0,0.7)',
+    subtitleBackground: 'rgba(0,0,0,0.7)',
     
     // Audio
     audioBoost: false,
     equalizer: {
       enabled: false,
-      preset: 'Normal', // 'Normal', 'Bass', 'Treble', 'Classical', etc.
-      bands: [0, 0, 0, 0, 0], // Frequency bands
+      preset: 'Normal', // 'Normal', 'Bass', 'Treble', 'Classical', 'Rock', 'Pop'
     },
     
-    // Background playback
-    backgroundAudio: true,
-    
-    // Picture-in-Picture
-    pipEnabled: true,
-    pipOnMinimize: true,
-    
-    // Screen
-    keepScreenOn: true,
+    // Advanced
+    pipEnabled: false,
+    pipOnMinimize: false,
     autoRotate: true,
     
-    // Network
-    wifiOnlyDownload: true,
-    
-    // Storage
-    videosFolderPath: null,
-    scanHiddenFolders: false,
+    // Gestures
+    doubleTapToSeek: true,
+    volumeGesture: true,
+    brightnessGesture: true,
+    swipeToSeek: true,
   },
+  
   reducers: {
     // Theme
-    toggleTheme: (state) => {
-      state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    setTheme: (state, action) => {
+      state.theme = action.payload;
     },
     
-    // Player settings
+    // General Settings
     setAutoplay: (state, action) => {
       state.autoplay = action.payload;
     },
     
-    setContinueWatching: (state, action) => {
-      state.continueWatching = action.payload;
-    },
-    
-    setDefaultPlaybackRate: (state, action) => {
-      state.defaultPlaybackRate = action.payload;
-    },
-    
-    // Gestures
     setGesturesEnabled: (state, action) => {
       state.gesturesEnabled = action.payload;
+    },
+    
+    setBackgroundAudio: (state, action) => {
+      state.backgroundAudio = action.payload;
+    },
+    
+    setKeepScreenOn: (state, action) => {
+      state.keepScreenOn = action.payload;
     },
     
     setSeekInterval: (state, action) => {
       state.seekInterval = action.payload;
     },
     
+    // Subtitles
     toggleSubtitles: (state) => {
       state.subtitlesEnabled = !state.subtitlesEnabled;
     },
-    // Subtitles
-    setSubtitleSettings: (state, action) => {
-      state.subtitleSize = action.payload.size || state.subtitleSize;
-      state.subtitleColor = action.payload.color || state.subtitleColor;
-      state.subtitleBackgroundColor = action.payload.backgroundColor || state.subtitleBackgroundColor;
+    
+    setSubtitlesEnabled: (state, action) => {
+      state.subtitlesEnabled = action.payload;
     },
     
-    // Equalizer
+    setSubtitleSize: (state, action) => {
+      state.subtitleSize = action.payload;
+    },
+    
+    setSubtitleColor: (state, action) => {
+      state.subtitleColor = action.payload;
+    },
+    
+    setSubtitleBackground: (state, action) => {
+      state.subtitleBackground = action.payload;
+    },
+    
+    // Audio
+    setAudioBoost: (state, action) => {
+      state.audioBoost = action.payload;
+    },
+    
     setEqualizer: (state, action) => {
       state.equalizer = { ...state.equalizer, ...action.payload };
     },
     
-    // Background audio
-    setBackgroundAudio: (state, action) => {
-      state.backgroundAudio = action.payload;
-    },
-
-    setAudioBoost: (state, action) => {
-      state.audioBoost = action.payload;
-    },
-        
-    // PiP
+    // Advanced
     setPipEnabled: (state, action) => {
       state.pipEnabled = action.payload;
     },
+    
     setPipOnMinimize: (state, action) => {
       state.pipOnMinimize = action.payload;
-    },
-    
-    // Screen settings
-    setKeepScreenOn: (state, action) => {
-      state.keepScreenOn = action.payload;
     },
     
     setAutoRotate: (state, action) => {
       state.autoRotate = action.payload;
     },
     
-    // Storage
-    setScanHiddenFolders: (state, action) => {
-      state.scanHiddenFolders = action.payload;
+    // Gestures
+    setDoubleTapToSeek: (state, action) => {
+      state.doubleTapToSeek = action.payload;
+    },
+    
+    setVolumeGesture: (state, action) => {
+      state.volumeGesture = action.payload;
+    },
+    
+    setBrightnessGesture: (state, action) => {
+      state.brightnessGesture = action.payload;
+    },
+    
+    setSwipeToSeek: (state, action) => {
+      state.swipeToSeek = action.payload;
+    },
+    
+    // Reset all settings
+    resetSettings: (state) => {
+      return settingsSlice.getInitialState();
     },
   },
 });
 
 export const {
-  toggleTheme,
+  setTheme,
   setAutoplay,
-  setContinueWatching,
-  setDefaultPlaybackRate,
   setGesturesEnabled,
-  setSeekInterval,
-  setSubtitleSettings,
-  toggleSubtitles,
-  setEqualizer,
   setBackgroundAudio,
+  setKeepScreenOn,
+  setSeekInterval,
+  toggleSubtitles,
+  setSubtitlesEnabled,
+  setSubtitleSize,
+  setSubtitleColor,
+  setSubtitleBackground,
   setAudioBoost,
+  setEqualizer,
   setPipEnabled,
   setPipOnMinimize,
-  setKeepScreenOn,
   setAutoRotate,
-  setScanHiddenFolders,
+  setDoubleTapToSeek,
+  setVolumeGesture,
+  setBrightnessGesture,
+  setSwipeToSeek,
+  resetSettings,
 } = settingsSlice.actions;
 
 export default settingsSlice.reducer;
+
+// Selectors
+export const selectTheme = (state) => state.settings.theme;
+export const selectAutoplay = (state) => state.settings.autoplay;
+export const selectGesturesEnabled = (state) => state.settings.gesturesEnabled;
+export const selectSubtitlesEnabled = (state) => state.settings.subtitlesEnabled;
+export const selectEqualizer = (state) => state.settings.equalizer;

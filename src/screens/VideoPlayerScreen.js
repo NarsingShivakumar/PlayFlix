@@ -14,6 +14,7 @@ import {
   PanResponder,
   ActivityIndicator,
   ScrollView,
+  AppState,
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 import Video from 'react-native-video';
@@ -36,12 +37,14 @@ import { formatDuration } from '../utils/formatters';
 import VideoControls from '../components/VideoControls';
 import GestureOverlay from '../components/GestureOverlay';
 import SettingsMenu from '../components/SettingsMenu';
+import PipHandler, { usePipModeListener } from 'react-native-pip-android';
 
 const { width, height } = Dimensions.get('window');
 
 const VideoPlayerScreen = ({ navigation }) => {
   const dispatch = useDispatch();
   const videoRef = useRef(null);
+  const appState = useRef(AppState.currentState);
 
   const currentVideo = useSelector((state) => state.player.currentVideo);
   const isPlaying = useSelector((state) => state.player.isPlaying);
@@ -53,6 +56,8 @@ const VideoPlayerScreen = ({ navigation }) => {
   const showControls = useSelector((state) => state.player.showControls);
   const watchHistory = useSelector((state) => state.player.watchHistory);
   const settings = useSelector((state) => state.settings);
+
+  const inPipMode = usePipModeListener();
 
   const [isLocked, setIsLocked] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -131,6 +136,37 @@ const VideoPlayerScreen = ({ navigation }) => {
       console.warn('Failed to get brightness', e);
     });
   }, []);
+
+  useEffect(() => {
+  if (Platform.OS !== 'android') return;
+
+  const subscription = AppState.addEventListener('change', (nextState) => {
+    const prevState = appState.current;
+    appState.current = nextState;
+
+    // We care when the app is leaving foreground for background
+    if (
+      prevState === 'active' &&
+      (nextState === 'background' || nextState === 'inactive') &&
+      currentVideo &&
+      isPlaying &&
+      !inPipMode
+    ) {
+      // Try to enter PiP mode
+      try {
+        // Width/height are hints, not strict; you can tweak
+        PipHandler.enterPipMode(300, 214);
+      } catch (e) {
+        console.warn('Failed to enter PiP mode', e);
+      }
+    }
+  });
+
+  return () => {
+    subscription.remove();
+  };
+}, [currentVideo, isPlaying, inPipMode]);
+
 
   useEffect(() => {
     saveInterval.current = setInterval(() => {
@@ -258,10 +294,10 @@ const VideoPlayerScreen = ({ navigation }) => {
     }
 
     controlsTimeout.current = setTimeout(() => {
-      if (isPlaying && !isSeeking && !settingsVisible && !showSpeedMenu) {
+      if (!isLocked && !isSeeking && !settingsVisible && !showSpeedMenu) {
         dispatch(setShowControls(false));
       }
-    }, 500);
+    }, 1500);
   };
 
   // ✅ FIXED: PanResponder that handles both gestures and taps
@@ -407,14 +443,8 @@ const VideoPlayerScreen = ({ navigation }) => {
   const handleScreenTap = () => {
     if (isLocked) return;
 
-    if (showControls) {
-      dispatch(setShowControls(false));
-      if (controlsTimeout.current) {
-        clearTimeout(controlsTimeout.current);
-      }
-    } else {
-      showControlsTemporarily();
-    }
+    dispatch(setShowControls(true));
+    resetControlsTimeout();
   };
 
   const showSeekOverlay = (seconds) => {
@@ -470,7 +500,7 @@ const VideoPlayerScreen = ({ navigation }) => {
       <View style={styles.gestureLayer} {...panResponder.panHandlers} />
 
       {/* Gesture Feedback Overlay */}
-      {showGestureOverlay && (
+      {!inPipMode && showGestureOverlay && (
         <GestureOverlay type={gestureType} value={gestureValue} />
       )}
 
@@ -497,7 +527,7 @@ const VideoPlayerScreen = ({ navigation }) => {
       )}
 
       {/* Video Controls */}
-      {showControls && !isLocked && (
+      {!inPipMode && showControls && !isLocked && (
         <VideoControls
           isPlaying={isPlaying}
           currentTime={currentTime}

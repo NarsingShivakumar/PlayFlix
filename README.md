@@ -1,3 +1,41 @@
+# React Native MX Player Clone
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![React Native](https://img.shields.io/badge/React%20Native-%5E0.71-blue)](https://reactnative.dev/)
+[![Android](https://img.shields.io/badge/Platform-Android-brightgreen)](https://reactnative.dev/docs/platform-specific-code)
+[![Google Drive Integration](https://img.shields.io/badge/Google%20Drive-Supported-blue)](https://developers.google.com/drive)
+
+## Description
+
+**React Native MX Player Clone** is a feature-rich Android video player app built with React Native, offering seamless local and Google Drive video playback. This app emulates MX Player with modern gesture controls, smart playlists, subtitles, background audio, speed adjustment, dark mode, PiP, and advanced equalizer. It is built for high performance, flexibility, and ease of use, making it a perfect open-source base for the ultimate mobile media experience.
+
+---
+
+## Features
+
+- Local and Google Drive video playback (all major formats)
+- Smooth folder browsing, sorting, and search
+- Swipe gestures for volume, brightness, seek
+- Double-tap for fast forward/rewind
+- Picture-in-Picture (PiP) support
+- Playback speed: 0.25× to 2×
+- Subtitles and audio track switching
+- Favorites & continue watching
+- Background audio playback
+- Equalizer and audio boost settings
+- UI auto-hide after 5s inactivity, quick show on tap
+- Beautiful dark and light themes
+
+---
+
+
+
+---
+
+## Installation
+
+
+
 This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
 
 # Getting Started
